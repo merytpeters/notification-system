@@ -1,0 +1,46 @@
+{
+    "name": "notification-system",
+    "version": "1.0.0",
+    "description": "A microservices-based notification system",
+    "main": "index.js",
+    "scripts": {
+        "install:all": "npm install && npm run install:shared && npm run install:services",
+        "install:shared": "cd shared && npm install",
+        "install:services": "cd services/api-gateway && npm install && cd ../user-service && npm install && cd ../email-service && npm install && cd ../push-notification-service && npm install && cd ../template-service && npm install",
+        "build": "npm run build:shared && npm run build:services",
+        "build:shared": "cd shared && npm run build",
+        "build:services": "cd services/api-gateway && npm run build && cd ../user-service && npm run build && cd ../email-service && npm run build && cd ../push-notification-service && npm run build && cd ../template-service && npm run build",
+        "dev": "docker-compose -f infrastructure/docker/docker-compose.dev.yml up",
+        "prod": "docker-compose -f infrastructure/docker/docker-compose.prod.yml up",
+        "test": "npm run test:shared && npm run test:services",
+        "test:shared": "cd shared && npm test",
+        "test:services": "cd services/api-gateway && npm test && cd ../user-service && npm test && cd ../email-service && npm test && cd ../push-notification-service && npm test && cd ../template-service && npm test",
+        "lint": "npm run lint:shared && npm run lint:services",
+        "lint:shared": "cd shared && npm run lint",
+        "lint:services": "cd services/api-gateway && npm run lint && cd ../user-service && npm run lint && cd ../email-service && npm run lint && cd ../push-notification-service && npm run lint && cd ../template-service && npm run lint"
+    },
+    "keywords": [
+        "notification",
+        "microservices",
+        "typescript",
+        "nodejs"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {},
+    "devDependencies": {
+        "@types/dotenv": "^6.1.1",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+        "ts-node": "^10.9.0",
+        "nodemon": "^3.0.0",
+        "eslint": "^8.0.0",
+        "@typescript-eslint/eslint-plugin": "^5.0.0",
+        "@typescript-eslint/parser": "^5.0.0",
+        "prettier": "^3.0.0"
+    },
+    "workspaces": [
+        "shared",
+        "services/*"
+    ]
+}
