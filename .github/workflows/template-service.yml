@@ -6,11 +6,11 @@ on:
       - main
       - template-service-dev
     paths:
-      - 'services/template-service/**'
+      - 'template-service/**'
       - '.github/workflows/template-service.yml'
   pull_request:
     paths:
-      - 'services/template-service/**'
+      - 'template-service/**'
 
 permissions:
   contents: read
@@ -33,9 +33,9 @@ jobs:
 
       - name: Run Black (check)
         run: |
-          echo "Running black --check on services/template-service"
+          echo "Running black --check on template-service"
           black --version || true
-          black --check services/template-service
+          black --check template-service
 
   docker-run:
     name: Build and run Docker (sanity)
@@ -62,8 +62,8 @@ jobs:
       - name: Build and load Docker image locally
         uses: docker/build-push-action@v4
         with:
-          context: services/template-service
-          file: services/template-service/Dockerfile
+          context: template-service
+          file: template-service/Dockerfile
           push: false
           load: true
           tags: template-service:ci
