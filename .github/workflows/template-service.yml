@@ -41,7 +41,9 @@ jobs:
     name: Build and run Docker (sanity)
     needs: black-check
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.repository == 'merytpeters/notification-system'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
