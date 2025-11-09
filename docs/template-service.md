@@ -51,10 +51,6 @@ source .venv/bin/activate
 # upgrade pip and install runtime dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
-
-# optionally copy .env.example to .env and edit
-cp .env.example .env
-# Edit .env to set TEMPLATE_DATABASE_URL, REDIS_URL, etc.
 ```
 
 ## Runtime / entrypoint
@@ -64,35 +60,8 @@ This service is a FastAPI app. In development you typically run with Uvicorn:
 - uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Configuration (recommended environment variables)
-
-- PORT — service listen port (default: 8000)
 - TEMPLATE_DATABASE_URL — Postgres connection string (Xata-provided or self-hosted)
 
-## API surface (examples)
-
-- GET /templates/{namespace}/{name}?version=latest&locale=en
-  - Returns template metadata or rendered content depending on query params.
-
-- POST /templates/preview
-  - Request: template body + variables
-  - Response: rendered output (useful for previewing templates in UI)
-
-- POST /templates
-  - Create a new template (auth required)
-
-Design note: Keep the API small and focused — rendering and preview endpoints are the most important for consumers.
-
-## Data model (summary)
-
-- Template: id, namespace, name, version, locale, subject, body, metadata, created_at, updated_at
-- Template variables: schema describing expected keys and their types for validation
-
-Use Pydantic models for request/response and a migration-friendly schema for the DB.
-
-## Caching
-
-- Cache rendered templates keyed by template id/version/locale + variables fingerprint.
-- Use Redis for the cache and keep a sensible TTL. Provide a cache-bust endpoint or pub/sub invalidation when templates are updated.
 
 ## Healthchecks & readiness
 
@@ -101,19 +70,6 @@ Use Pydantic models for request/response and a migration-friendly schema for the
   - DB reachable
   - Redis reachable (optionally)
 
-This is used by orchestrators for liveness/readiness.
-
-## Observability & logging
-
-- Structured logs (JSON) with request ids
-- Request/response metrics (latency, error rate)
-- Tracing across services is recommended (OpenTelemetry)
-
-## Security
-
-- Validate and sanitize all template inputs. Avoid executing arbitrary code during rendering.
-- Authenticate and authorize template creation/updates.
-- Rate-limit render/preview endpoints if exposed publicly through the API Gateway.
 
 ## Containerization / Docker notes
 
@@ -129,14 +85,6 @@ docker run --rm -p 8000:8000 \
   -e REDIS_URL="redis://..." \
   template-service:dev
 ```
-
-Replace the environment variables with local/testing values. For production, use your container registry and deployment pipeline.
-
-## Testing and local development
-
-- Unit tests: pydantic models, rendering logic, small service functions
-- Integration tests: DB + Redis (use test containers or local dev instances)
-- Add test commands to CI and run on PRs
 
 Formatting
 
@@ -166,4 +114,3 @@ Formatting
 - `services/template-service/app` — application code and routes
 - `services/template-service/requirements.txt` — Python dependencies
 - `services/template-service/Dockerfile` — container build
-
