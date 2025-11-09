@@ -8,7 +8,7 @@ Primary consumers include the API Gateway, Email Service, and Push Notification 
 
 Code & where to find it
 
-- Service code: `services/template-service/` — contains the Python package (`app/`), `requirements.txt`, `.env.example`, and `Dockerfile`.
+- Service code: `template-service/` — contains the Python package (`app/`), `requirements.txt`, `.env.example`, and `Dockerfile`.
 - Developer docs: `docs/template-service.md` (this file).
 
 ## Key responsibilities
@@ -39,7 +39,7 @@ Adjust paths above if your layout differs.
 
 We recommend running the service inside a Python virtual environment to keep dependencies isolated.
 
-From the `services/template-service` folder (macOS / Linux, zsh):
+From the `template-service` folder (macOS / Linux, zsh):
 
 ```bash
 # create a venv in the service folder
@@ -78,7 +78,7 @@ This service is a FastAPI app. In development you typically run with Uvicorn:
 Build and run locally:
 
 ```bash
-cd services/template-service
+cd template-service
 docker build -t template-service:dev .
 docker run --rm -p 8000:8000 \
   -e TEMPLATE_DATABASE_URL="postgres://..." \
@@ -93,13 +93,13 @@ Formatting
   - Check formatting without changing files:
 
     ```bash
-    black --check services/template-service
+    black --check template-service
     ```
 
   - Auto-format files in-place:
 
     ```bash
-    black services/template-service
+    black template-service
     ```
 
   It's recommended to install Black in your dev environment (pip install black) or add it to a `dev-requirements.txt`. For pre-commit integration, add Black to your `.pre-commit-config.yaml` so commits are auto-formatted.
@@ -111,6 +111,6 @@ Formatting
 
 ## Where to look next
 
-- `services/template-service/app` — application code and routes
-- `services/template-service/requirements.txt` — Python dependencies
-- `services/template-service/Dockerfile` — container build
+- `template-service/app` — application code and routes
+- `template-service/requirements.txt` — Python dependencies
+- `template-service/Dockerfile` — container build
