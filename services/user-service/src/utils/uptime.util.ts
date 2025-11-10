@@ -41,7 +41,7 @@ export function getFormattedUptime(): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   
-  const parts = [];
+const parts: string[] = [];
   
   if (days > 0) {
     parts.push(`${days} day${days !== 1 ? 's' : ''}`);
