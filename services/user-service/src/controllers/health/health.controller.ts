@@ -2,7 +2,6 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { getSafeUptime } from '../utils/uptime.util';
 
-@ApiTags('health')
 @Controller('health')
 export class HealthController {
   @Get()
