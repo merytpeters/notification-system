@@ -7,8 +7,8 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
- 
-  constructor(private prisma: PrismaService) {}
+
+  constructor(private prisma: PrismaService) { }
 
   async create(createUserDto: CreateUserDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -70,13 +70,13 @@ export class UsersService {
 
   async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.prisma.user.findUnique({ where: { id } });
-    
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
     const updateData: any = { ...updateUserDto };
-    
+
     if (updateUserDto.password) {
       updateData.password_hash = await bcrypt.hash(updateUserDto.password, 10);
       delete updateData.password;
@@ -94,32 +94,44 @@ export class UsersService {
     return result;
   }
 
-  async login(loginUserDto: LoginUserDto) {
+  async validateCredentials(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
-      where: { email: loginUserDto.email },
+      where: { email },
+      include: {
+        preferences: true,
+      },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      return null; // Return null for invalid credentials
     }
 
-    const isPasswordValid = await bcrypt.compare(loginUserDto.password, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      return null; // Return null for invalid credentials
     }
 
-    const { password_hash, ...result } = user;
-    
-    // Update push token if provided
-    if (loginUserDto.push_token) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { push_token: loginUserDto.push_token },
-      });
-      result.push_token = loginUserDto.push_token;
-    }
-
+    // Return user without password
+    const { password_hash: _, ...result } = user;
     return result;
   }
+  
+  async getUserPreferences(userId: string) {
+    const preferences = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        preferences: true,
+      },
+    });
+
+    if (!preferences) {
+      throw new NotFoundException('User preferences not found');
+    }
+
+    const { password_hash: _, ...result } = preferences;
+    return result;
+  }
+
+
 }
