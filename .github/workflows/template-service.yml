@@ -1,4 +1,4 @@
-name: Template Service CI (simple)
+name: Template Service CI
 
 on:
   push:
@@ -38,22 +38,27 @@ jobs:
           black --check template-service
 
   docker-run:
-    name: Build and run Docker (sanity)
+    name: Build and run Docker with Redis
     needs: black-check
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      github.repository == 'merytpeters/notification-system'
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --save 60 1
+          --loglevel warning
+
+    env:
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      TEMPLATE_DATABASE_URL: ${{ secrets.TEMPLATE_DATABASE_URL }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Ensure TEMPLATE_DATABASE_URL secret is set
-        run: |
-          if [ -z "${{ secrets.TEMPLATE_DATABASE_URL }}" ]; then
-            echo "ERROR: secrets.TEMPLATE_DATABASE_URL is not set for this repository.\nSet it under Settings → Secrets to a valid database URL for the template service (or use a test DB)." >&2
-            exit 1
-          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -61,10 +66,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Start Redis container
-        run: docker run -d --name redis-ci -p 6379:6379 redis:7
-
-      - name: Build Template Service image
+      - name: Build Docker image
         uses: docker/build-push-action@v4
         with:
           context: template-service
@@ -73,18 +75,18 @@ jobs:
           load: true
           tags: template-service:ci
 
-      - name: Run Template Service container and perform health check
+      - name: Run container and health check
         shell: bash
         run: |
           set -euo pipefail
-          echo "Starting Template Service container..."
+          echo "Starting container..."
           docker run -d --name template-ci \
-            -e TEMPLATE_DATABASE_URL="${{ secrets.TEMPLATE_DATABASE_URL }}" \
-            -e REDIS_HOST="host.docker.internal" \
-            -e REDIS_PORT="6379" \
+            -e TEMPLATE_DATABASE_URL="${TEMPLATE_DATABASE_URL}" \
+            -e REDIS_HOST="${REDIS_HOST}" \
+            -e REDIS_PORT="${REDIS_PORT}" \
+            -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
             -p 8000:8000 \
             template-service:ci
-
           echo "Waiting up to 20s for /health..."
           for i in {1..20}; do
             if curl -sS http://localhost:8000/health >/dev/null 2>&1; then
@@ -94,10 +96,8 @@ jobs:
             echo "Attempt $i: service not ready yet"
             sleep 1
           done
-
           echo "Container logs (last 100 lines):"
           docker logs template-ci --tail 100 || true
           docker stop template-ci
-          docker rm template-ci
-          docker stop redis-ci
-          docker rm redis-ci
+          docker rm template-ci || true
+
