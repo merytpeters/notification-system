@@ -49,6 +49,6 @@ async function bootstrap() {
     `🚀 Application is running on: http://localhost:${port}${apiPrefix}`,
   );
   logger.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
-  logger.log(`🏥 Health check: http://localhost:${port}${apiPrefix}/health`);
+  logger.log(`🏥 Health check: http://localhost:${port}${apiPrefix}/gateway-health`);
 }
 bootstrap();
