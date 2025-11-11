@@ -53,6 +53,42 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+Running with Redis
+
+The app initializes and pings Redis during startup (see `app/core/redis_manager.py`). If Redis is not available the startup may fail (or you may choose to run in a degraded mode). You can run Redis locally in one of two easy ways:
+
+- Run the system Redis (macOS/brew):
+
+  ```bash
+  # install once if needed
+  brew install redis
+
+  # run Redis server in a separate terminal
+  redis-server /usr/local/etc/redis.conf
+  ```
+
+- Or run Redis with Docker (recommended for isolation):
+
+  ```bash
+  docker run --rm -p 6379:6379 --name redis-local redis:7-alpine
+  ```
+
+After you have a Redis server running, set the Redis environment variables in `.env` (copy from `.env.example`):
+
+```env
+TEMPLATE_DATABASE_URL="postgres://user:pass@localhost:5432/template_db"
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+```
+
+Notes:
+
+- If you run Redis in Docker but run the app in a container too, use the Docker network service name (for example `redis` if defined in docker-compose) rather than `localhost`.
+- The app's lifespan will call `init_redis()` and then `get_redis()` which will perform a ping; if the ping fails the lifespan will raise and the app may exit. For development you can either ensure Redis is running before starting the app, or edit the lifespan to continue in degraded mode.
+
+
 ## Runtime / entrypoint
 
 This service is a FastAPI app. In development you typically run with Uvicorn:
