@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from sqlmodel import SQLModel
 from .db import engine
 from .redis_manager import init_redis, get_redis, close_redis
-from app.models.templater import Template
+from app.models.templater import Template, TemplateVersion
 
 
 @asynccontextmanager

@@ -1,5 +1,5 @@
 """Template schemas"""
-
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
 from uuid import UUID
@@ -28,39 +28,62 @@ class TemplateType(str, enum.Enum):
     WEB = "web"
 
 
-class TemplateCreate(BaseModel):
-    """Create Schema"""
-
-    name: str
+class TemplateVersionCreate(BaseModel):
+    """Initial version creation"""
     header: str
-    subtitle: str | None = None
+    subtitle: Optional[str] = None
     content: str
+    is_active: Optional[bool] = True
+    creator_user_id: str
+    creator_user_name: Optional[str] = None
+
+
+class TemplateVersionUpdate(BaseModel):
+    """Update a specific template version"""
+    header: Optional[str] = None
+    subtitle: Optional[str] = None
+    content: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class TemplateVersionOut(BaseSchema):
+    """Template version output"""
+    id: UUID
+    template_id: UUID
+    version: int
+    header: str
+    subtitle: Optional[str] = None
+    content: str
+    is_active: bool
+    creator_user_id: str
+    creator_user_name: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class TemplateCreate(BaseModel):
+    """Create a new template along with its initial version"""
+    name: str
+    description: Optional[str] = None
     template_type: TemplateType
+    initial_version: TemplateVersionCreate
 
 
 class TemplateUpdate(BaseModel):
-    """Update schema"""
-
-    header: str | None = None
-    subtitle: str | None = None
-    content: str | None = None
-    is_active: bool | None = None
+    """Update template metadata (not version content)"""
+    description: Optional[str] = None
+    template_type: Optional[TemplateType] = None
 
 
 class TemplateOut(BaseSchema):
-    """Response Schema"""
-
+    """Template with versions"""
     id: UUID
     name: str
-    header: str
-    subtitle: str | None
-    content: str
+    description: Optional[str] = None
     template_type: TemplateType
-    version: int
-    is_active: bool
-    creator_user_id: str
-    creator_user_name: str | None
     created_at: datetime
-    updated_at: datetime | None
+    versions: List[TemplateVersionOut]
 
     model_config = {"from_attributes": True}
