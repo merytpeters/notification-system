@@ -61,7 +61,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build and load Docker image locally
+      - name: Start Redis container
+        run: docker run -d --name redis-ci -p 6379:6379 redis:7
+
+      - name: Build Template Service image
         uses: docker/build-push-action@v4
         with:
           context: template-service
@@ -70,12 +73,18 @@ jobs:
           load: true
           tags: template-service:ci
 
-      - name: Run container and perform health check
+      - name: Run Template Service container and perform health check
         shell: bash
         run: |
           set -euo pipefail
-          echo "Starting container..."
-          docker run -d --name template-ci -e TEMPLATE_DATABASE_URL="${{ secrets.TEMPLATE_DATABASE_URL }}" -p 8000:8000 template-service:ci
+          echo "Starting Template Service container..."
+          docker run -d --name template-ci \
+            -e TEMPLATE_DATABASE_URL="${{ secrets.TEMPLATE_DATABASE_URL }}" \
+            -e REDIS_HOST="host.docker.internal" \
+            -e REDIS_PORT="6379" \
+            -p 8000:8000 \
+            template-service:ci
+
           echo "Waiting up to 20s for /health..."
           for i in {1..20}; do
             if curl -sS http://localhost:8000/health >/dev/null 2>&1; then
@@ -85,7 +94,10 @@ jobs:
             echo "Attempt $i: service not ready yet"
             sleep 1
           done
+
           echo "Container logs (last 100 lines):"
           docker logs template-ci --tail 100 || true
           docker stop template-ci
-          docker rm template-ci || true
+          docker rm template-ci
+          docker stop redis-ci
+          docker rm redis-ci
