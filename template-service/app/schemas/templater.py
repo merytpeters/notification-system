@@ -1,4 +1,5 @@
 """Template schemas"""
+
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -30,6 +31,7 @@ class TemplateType(str, enum.Enum):
 
 class TemplateVersionCreate(BaseModel):
     """Initial version creation"""
+
     header: str
     subtitle: Optional[str] = None
     content: str
@@ -40,6 +42,7 @@ class TemplateVersionCreate(BaseModel):
 
 class TemplateVersionUpdate(BaseModel):
     """Update a specific template version"""
+
     header: Optional[str] = None
     subtitle: Optional[str] = None
     content: Optional[str] = None
@@ -48,6 +51,7 @@ class TemplateVersionUpdate(BaseModel):
 
 class TemplateVersionOut(BaseSchema):
     """Template version output"""
+
     id: UUID
     template_id: UUID
     version: int
@@ -65,6 +69,7 @@ class TemplateVersionOut(BaseSchema):
 
 class TemplateCreate(BaseModel):
     """Create a new template along with its initial version"""
+
     name: str
     description: Optional[str] = None
     template_type: TemplateType
@@ -73,12 +78,14 @@ class TemplateCreate(BaseModel):
 
 class TemplateUpdate(BaseModel):
     """Update template metadata (not version content)"""
+
     description: Optional[str] = None
     template_type: Optional[TemplateType] = None
 
 
 class TemplateOut(BaseSchema):
     """Template with versions"""
+
     id: UUID
     name: str
     description: Optional[str] = None
