@@ -1,4 +1,4 @@
-name: Template Service CI
+name: Template Service CI (simple)
 
 on:
   push:
@@ -38,27 +38,22 @@ jobs:
           black --check template-service
 
   docker-run:
-    name: Build and run Docker with Redis
+    name: Build and run Docker (sanity)
     needs: black-check
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --save 60 1
-          --loglevel warning
-
-    env:
-      REDIS_HOST: localhost
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ""
-      TEMPLATE_DATABASE_URL: ${{ secrets.TEMPLATE_DATABASE_URL }}
-
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.repository == 'merytpeters/notification-system'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Ensure TEMPLATE_DATABASE_URL secret is set
+        run: |
+          if [ -z "${{ secrets.TEMPLATE_DATABASE_URL }}" ]; then
+            echo "ERROR: secrets.TEMPLATE_DATABASE_URL is not set for this repository.\nSet it under Settings → Secrets to a valid database URL for the template service (or use a test DB)." >&2
+            exit 1
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -66,7 +61,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build Docker image
+      - name: Create docker network
+        run: |
+          docker network create template-ci-net || true
+
+      - name: Start Redis container on network
+        run: |
+          docker run -d --name redis-ci --network template-ci-net redis:7-alpine
+
+      - name: Build Template Service image
         uses: docker/build-push-action@v4
         with:
           context: template-service
@@ -75,18 +78,19 @@ jobs:
           load: true
           tags: template-service:ci
 
-      - name: Run container and health check
+      - name: Run Template Service container and perform health check
         shell: bash
         run: |
           set -euo pipefail
-          echo "Starting container..."
+          echo "Starting Template Service container..."
           docker run -d --name template-ci \
-            -e TEMPLATE_DATABASE_URL="${TEMPLATE_DATABASE_URL}" \
-            -e REDIS_HOST="${REDIS_HOST}" \
-            -e REDIS_PORT="${REDIS_PORT}" \
-            -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+            --network template-ci-net \
+            -e TEMPLATE_DATABASE_URL="${{ secrets.TEMPLATE_DATABASE_URL }}" \
+            -e REDIS_HOST="redis-ci" \
+            -e REDIS_PORT="6379" \
             -p 8000:8000 \
             template-service:ci
+
           echo "Waiting up to 20s for /health..."
           for i in {1..20}; do
             if curl -sS http://localhost:8000/health >/dev/null 2>&1; then
@@ -96,8 +100,11 @@ jobs:
             echo "Attempt $i: service not ready yet"
             sleep 1
           done
+
           echo "Container logs (last 100 lines):"
           docker logs template-ci --tail 100 || true
-          docker stop template-ci
+          docker stop template-ci || true
           docker rm template-ci || true
-
+          docker stop redis-ci || true
+          docker rm redis-ci || true
+          docker network rm template-ci-net || true
