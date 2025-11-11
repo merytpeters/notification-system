@@ -120,7 +120,7 @@ export class UserServiceClient {
       if (error.response?.status === 401) {
         return null;
       }
-      
+
       this.logger.error('Failed to validate user', error);
       throw new HttpException(
         'Failed to validate user',
