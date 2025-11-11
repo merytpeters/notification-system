@@ -23,7 +23,18 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository for the API Gateway service.
+
+## Environment Configuration
+
+Before running the application, you need to set up your environment variables:
+
+1. Copy the example environment file:
+```bash
+$ cp .env.example .env
+```
+
+2. Update the `.env` file with your configuration. **Important**: Make sure to set a secure `JWT_SECRET` for production environments (at least 32 characters long).
 
 ## Project setup
 
