@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.lifespan import lifespan
+from app.api.v1.templates import router as templates_router
 
 
 app = FastAPI(
@@ -19,6 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(templates_router, prefix="/api/v1/templates", tags=["Templates"])
 
 
 @app.get("/health")

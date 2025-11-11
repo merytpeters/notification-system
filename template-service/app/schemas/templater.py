@@ -7,14 +7,15 @@ import enum
 
 
 class BaseSchema(BaseModel):
-    class Config:
-        json_encoders = {
+    model_config = {
+        "json_encoders": {
             datetime: lambda v: (
                 v.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
                 if v
                 else None
             )
         }
+    }
 
 
 class TemplateType(str, enum.Enum):
@@ -62,5 +63,4 @@ class TemplateOut(BaseSchema):
     created_at: datetime
     updated_at: datetime | None
 
-    class Config(BaseSchema.Config):
-        orm_mode = True
+    model_config = {"from_attributes": True}
