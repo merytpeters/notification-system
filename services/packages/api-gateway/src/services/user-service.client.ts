@@ -15,6 +15,8 @@ export interface User {
   email: string;
   push_token?: string;
   preferences: UserPreferences;
+  is_active?: boolean;
+  created_at?: string;
 }
 
 @Injectable()
@@ -140,6 +142,27 @@ export class UserServiceClient {
         error,
       );
       return false; // Default to not allowing if we can't check
+    }
+  }
+
+  async createUser(email: string, password: string, fullName: string, pushToken?: string): Promise<User> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.userServiceUrl}/users/create-account`, {
+          email,
+          password,
+          full_name: fullName,
+          push_token: pushToken,
+        }),
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to create user ${email}`, error);
+      throw new HttpException(
+        'Failed to create user',
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }

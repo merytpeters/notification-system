@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserServiceClient } from '../services/user-service.client';
-import { LoginDto, AuthResponseDto } from '../dto/auth.dto';
+import { LoginDto, AuthResponseDto, RegisterDto, RegisterResponseDto } from '../dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -53,6 +53,35 @@ export class AuthService {
         throw error;
       }
       throw new UnauthorizedException('Authentication failed');
+    }
+  }
+
+  async register(registerDto: RegisterDto): Promise<RegisterResponseDto> {
+    try {
+      // Create user via User Service
+      const user = await this.userServiceClient.createUser(
+        registerDto.email,
+        registerDto.password,
+        registerDto.full_name,
+        registerDto.push_token,
+      );
+
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          full_name: user.name,
+          is_active: user.is_active || true,
+          created_at: user.created_at || new Date().toISOString(),
+          preferences: {
+            email_enabled: user.preferences.email,
+            push_enabled: user.preferences.push,
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error('Registration failed', error);
+      throw new UnauthorizedException('Registration failed');
     }
   }
 
