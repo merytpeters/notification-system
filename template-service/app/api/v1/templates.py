@@ -20,7 +20,7 @@ from app.schemas.templater import (
     TemplatePatch,
     TemplateRenderSchema,
     TemplateVersionUpdate,
-    PreviewRequest
+    PreviewRequest,
 )
 
 
@@ -322,7 +322,9 @@ async def preview_template(
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
         if not template.versions:
-            raise HTTPException(status_code=404, detail="No versions available for this template")
+            raise HTTPException(
+                status_code=404, detail="No versions available for this template"
+            )
 
         latest_version = sorted(template.versions, key=lambda v: v.version)[-1]
         version = latest_version.model_dump()

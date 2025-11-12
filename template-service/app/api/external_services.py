@@ -1,4 +1,5 @@
 """External Microservices"""
+
 # services/external.py
 import os
 import httpx
