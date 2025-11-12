@@ -73,6 +73,20 @@ services:
       - notification-network
     restart: unless-stopped
 
+  template-service:
+    build:
+      context: ./template-service
+    container_name: template-service
+    ports:
+      - "8000:8000"
+    environment:
+      TEMPLATE_DATABASE_URL: ${TEMPLATE_DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+
+    networks:
+      - notification-network
+    restart: unless-stopped
+
 networks:
   notification-network:
     driver: bridge
