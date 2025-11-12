@@ -1,0 +1,27 @@
+/* Email preview styles - simple, responsive, and inline-friendly where possible */
+:root{
+	--bg: #f6f9fc;
+	--container: #ffffff;
+	--accent: #0b67ff;
+	--muted: #6b7280;
+	--text: #111827;
+}
+
+html,body{height:100%;margin:0;padding:0;background:var(--bg);font-family:Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
+.notification{max-width:680px;margin:28px auto;padding:20px;background:var(--container);border-radius:8px;box-shadow:0 6px 18px rgba(17,24,39,0.08);color:var(--text);}
+.notification h2{margin:0 0 8px;font-size:20px;color:var(--accent)}
+.notification h3{margin:0 0 12px;color:var(--muted);font-weight:600;font-size:14px}
+.notification p{line-height:1.5;margin:10px 0;color:var(--text)}
+.notification .footer{margin-top:18px;border-top:1px solid #eef2f7;padding-top:12px;font-size:13px;color:var(--muted)}
+
+/* make code/content blocks look good in emails */
+.notification pre, .notification code{background:#f3f4f6;padding:8px;border-radius:4px;font-family:monospace;font-size:13px;overflow:auto}
+
+/* small utility */
+.muted{color:var(--muted);font-size:13px}
+
+@media (max-width:520px){
+	.notification{margin:12px;padding:14px;border-radius:6px}
+	.notification h2{font-size:18px}
+}
+
