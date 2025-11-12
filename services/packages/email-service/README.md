@@ -14,7 +14,6 @@ A robust email service built with NestJS that handles email notifications throug
 - **Template Service Integration**: Fetches email templates from template service
 - **RabbitMQ Integration**: Consumes messages from notification queue
 
-## Architecture
 
 ### Message Flow
 

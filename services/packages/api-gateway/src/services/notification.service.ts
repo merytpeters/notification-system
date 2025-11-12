@@ -1,5 +1,4 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
 import { RabbitMQService, QueueMessage } from './rabbitmq.service';
 import { RedisService } from './redis.service';
 import { UserServiceClient } from './user-service.client';
@@ -29,6 +28,9 @@ export class NotificationService {
     userId?: string,
   ): Promise<NotificationResponseDto> {
     try {
+      // Dynamically import uuid
+      const { v4: uuidv4 } = await import('uuid');
+      
       // Check user preferences if userId is provided
       if (userId) {
         const hasPermission = await this.userServiceClient.checkNotificationPermission(
@@ -139,6 +141,9 @@ export class NotificationService {
         }
       }
 
+      // Dynamically import uuid
+      const { v4: uuidv4 } = await import('uuid');
+      
       const notificationId = uuidv4();
       const timestamp = new Date().toISOString();
 
