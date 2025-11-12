@@ -132,6 +132,35 @@ export class UsersService {
     const { password_hash: _, ...result } = preferences;
     return result;
   }
+  async updatePreferences(userId: string, preferences: { email_enabled?: boolean; push_enabled?: boolean }): Promise<any> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          preferences: true,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const updateData: any = { ...preferences };
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        include: {
+          preferences: true,
+        },
+      });
+
+      const { password_hash: _, ...result } = updatedUser;
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }
 
 
 }

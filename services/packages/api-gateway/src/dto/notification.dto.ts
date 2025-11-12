@@ -54,7 +54,7 @@ export class PushNotificationDto {
   @ApiProperty({ example: 'user-device-token-here' })
   @IsString()
   @IsNotEmpty()
-  push_token: string;
+  token: string;
 
   @ApiProperty({ example: 'New Message' })
   @IsString()
@@ -66,10 +66,35 @@ export class PushNotificationDto {
   @IsNotEmpty()
   body: string;
 
+  @ApiProperty({ enum: ['mobile', 'web'], example: 'mobile' })
+  @IsString()
+  @IsNotEmpty()
+  notification_type: 'mobile' | 'web';
+
+  @ApiProperty({ example: 'https://example.com/image.jpg', required: false })
+  @IsString()
+  @IsOptional()
+  image?: string;
+
+  @ApiProperty({ example: 'https://example.com/deep-link', required: false })
+  @IsString()
+  @IsOptional()
+  link?: string;
+
   @ApiProperty({ example: { action: 'open_chat', chat_id: '123' }, required: false })
   @IsObject()
   @IsOptional()
   data?: Record<string, any>;
+
+  @ApiProperty({ example: 'unique-12345', required: false })
+  @IsString()
+  @IsOptional()
+  idempotency_key?: string;
+
+  @ApiProperty({ example: 'user-123', required: false })
+  @IsString()
+  @IsOptional()
+  user_id?: string;
 }
 
 export class BulkEmailNotificationDto {

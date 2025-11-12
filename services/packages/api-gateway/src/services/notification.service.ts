@@ -44,17 +44,35 @@ export class NotificationService {
       const notificationId = uuidv4();
       const timestamp = new Date().toISOString();
 
-      const message: QueueMessage = {
+      // Create queue message for tracking
+      const queueMessage: QueueMessage = {
         notification_id: notificationId,
         type: 'email',
-        data: emailDto,
+        data: {
+          ...emailDto,
+          // Add email service specific fields
+          to: emailDto.email,
+          templateId: emailDto.template_id || 'default',
+          variables: {
+            ...emailDto.template_data,
+            subject: emailDto.subject,
+            body: emailDto.body,
+          },
+          request_id: notificationId, // Use notification_id as request_id for idempotency
+          user_id: userId,
+          priority: 1, // Default priority
+          metadata: {
+            source: 'api-gateway',
+            created_at: timestamp,
+          },
+        },
         user_id: userId,
         timestamp,
         retry_count: 0,
       };
 
       // Publish to RabbitMQ
-      await this.rabbitmqService.publishEmailNotification(message);
+      await this.rabbitmqService.publishEmailNotification(queueMessage);
 
       // Store initial status in Redis
       await this.redisService.setNotificationStatus(
@@ -91,10 +109,28 @@ export class NotificationService {
     userId?: string,
   ): Promise<NotificationResponseDto> {
     try {
+      // Handle idempotency key
+      if (pushDto.idempotency_key) {
+        const existingStatus = await this.redisService.getNotificationStatusByIdempotencyKey(pushDto.idempotency_key);
+        if (existingStatus) {
+          const existingMetadata = await this.redisService.getNotificationMetadataByIdempotencyKey(pushDto.idempotency_key);
+          if (existingMetadata) {
+            return {
+              notification_id: existingMetadata.notification_id,
+              status: existingStatus as NotificationStatus,
+              type: NotificationType.PUSH,
+              created_at: existingMetadata.created_at,
+              message: 'Notification already processed (idempotent request)',
+            };
+          }
+        }
+      }
+
       // Check user preferences if userId is provided
-      if (userId) {
+      const targetUserId = userId || pushDto.user_id;
+      if (targetUserId) {
         const hasPermission = await this.userServiceClient.checkNotificationPermission(
-          userId,
+          targetUserId,
           'push',
         );
 
@@ -109,8 +145,24 @@ export class NotificationService {
       const message: QueueMessage = {
         notification_id: notificationId,
         type: 'push',
-        data: pushDto,
-        user_id: userId,
+        data: {
+          ...pushDto,
+          // Add additional fields for push service
+          token: pushDto.token,
+          notification_type: pushDto.notification_type,
+          image: pushDto.image,
+          link: pushDto.link,
+          variables: pushDto.data || {},
+          request_id: pushDto.idempotency_key || notificationId,
+          user_id: targetUserId,
+          priority: 1, // Default priority
+          metadata: {
+            source: 'api-gateway',
+            created_at: timestamp,
+            idempotency_key: pushDto.idempotency_key,
+          },
+        },
+        user_id: targetUserId,
         timestamp,
         retry_count: 0,
       };
@@ -124,13 +176,26 @@ export class NotificationService {
         NotificationStatus.PENDING,
       );
 
+      // Store idempotency mapping if provided
+      if (pushDto.idempotency_key) {
+        await this.redisService.setIdempotencyMapping(
+          pushDto.idempotency_key,
+          notificationId,
+          timestamp,
+        );
+      }
+
       // Store notification metadata
       await this.redisService.storeNotificationMetadata(notificationId, {
         type: NotificationType.PUSH,
-        user_id: userId,
-        push_token: pushDto.push_token,
+        user_id: userId || pushDto.user_id,
+        push_token: pushDto.token,
         title: pushDto.title,
         created_at: timestamp,
+        idempotency_key: pushDto.idempotency_key,
+        notification_type: pushDto.notification_type,
+        image: pushDto.image,
+        link: pushDto.link,
       });
 
       this.logger.log(`Push notification queued: ${notificationId}`);
@@ -242,6 +307,26 @@ export class NotificationService {
       this.logger.log(`Notification ${notificationId} status updated to ${status}`);
     } catch (err) {
       this.logger.error(`Failed to update notification status: ${notificationId}`, err);
+    }
+  }
+
+  async getNotificationStatusByIdempotencyKey(idempotencyKey: string): Promise<any> {
+    try {
+      const status = await this.redisService.getNotificationStatusByIdempotencyKey(idempotencyKey);
+      const metadata = await this.redisService.getNotificationMetadataByIdempotencyKey(idempotencyKey);
+
+      if (!status || !metadata) {
+        throw new BadRequestException('Notification not found');
+      }
+
+      return {
+        notification_id: metadata.notification_id,
+        status,
+        ...metadata,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get notification status by idempotency key: ${idempotencyKey}`, error);
+      throw error;
     }
   }
 }
