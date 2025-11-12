@@ -1,5 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Query
 from typing import Optional, Dict, Any, List
 import asyncio
 import aio_pika
@@ -13,73 +12,26 @@ from google.oauth2 import service_account
 from google.auth.transport.requests import Request
 from contextlib import asynccontextmanager
 import logging
-from enum import Enum
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import select
-from app.models import Base, Notification, DeviceToken
+from app.models import Notification, DeviceToken
+from app.schemas import NotificationStatus, APIResponse, DeviceTokenRequest, BulkNotificationRequest, PushNotificationPayload
 
-# Configure logging
 logging.basicConfig(
+    filename="push_logs.log",
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# ============= Models =============
-class NotificationStatus(str, Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    SENT = "sent"
-    FAILED = "failed"
-    RETRYING = "retrying"
 
-class NotificationType(str, Enum):
-    MOBILE = "mobile"
-    WEB = "web"
-
-class PushNotificationPayload(BaseModel):
-    title: str
-    body: str
-    token: str
-    notification_type: NotificationType = NotificationType.MOBILE
-    image: Optional[str] = None
-    link: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
-    idempotency_key: Optional[str] = None
-    user_id: Optional[str] = None
-
-class BulkNotificationRequest(BaseModel):
-    notifications: List[PushNotificationPayload] = Field(..., min_length=1, max_length=100)
-
-class DeviceTokenRequest(BaseModel):
-    user_id: str
-    token: str
-    device_type: str = "mobile"  # mobile or web
-    platform: Optional[str] = None  # ios, android, chrome, firefox, etc.
-
-class PaginationMeta(BaseModel):
-    total: int
-    limit: int
-    page: int
-    total_pages: int
-    has_next: bool
-    has_previous: bool
-
-class APIResponse(BaseModel):
-    success: bool
-    data: Optional[Any] = None
-    error: Optional[str] = None
-    message: str
-    meta: Optional[PaginationMeta] = None
-
-# ============= Circuit Breaker =============
 class CircuitBreaker:
     def __init__(self, failure_threshold: int = 5, timeout: int = 60):
         self.failure_threshold = failure_threshold
         self.timeout = timeout
         self.failures = 0
         self.last_failure_time = None
-        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self.state = "CLOSED"  
     
     def call(self, func, *args, **kwargs):
         if self.state == "OPEN":
@@ -105,7 +57,7 @@ class CircuitBreaker:
                 logger.error(f"Circuit breaker opened after {self.failures} failures")
             raise e
 
-# ============= Push Service Manager =============
+
 class PushServiceManager:
     def __init__(self, service_account_path: str, project_id: str):
         self.service_account_path = service_account_path
@@ -153,11 +105,9 @@ class PushServiceManager:
                 }
             }
             
-            # Add optional image
             if payload.image:
                 message["message"]["notification"]["image"] = payload.image
             
-            # Add webpush link for web notifications
             if payload.link:
                 message["message"]["webpush"] = {
                     "fcm_options": {
@@ -165,7 +115,6 @@ class PushServiceManager:
                     }
                 }
             
-            # Add custom data
             if payload.data:
                 message["message"]["data"] = payload.data
             
@@ -181,7 +130,7 @@ class PushServiceManager:
         
         return self.circuit_breaker.call(_send)
 
-# ============= Message Queue Manager =============
+
 class MessageQueueManager:
     def __init__(self, rabbitmq_url: str):
         self.rabbitmq_url = rabbitmq_url
@@ -199,14 +148,13 @@ class MessageQueueManager:
             self.channel = await self.connection.channel()
             await self.channel.set_qos(prefetch_count=10)
             
-            # Declare direct exchange
             self.exchange = await self.channel.declare_exchange(
                 self.exchange_name,
                 aio_pika.ExchangeType.DIRECT,
                 durable=True
             )
             
-            # Declare push queue with dead letter routing
+
             push_queue_obj = await self.channel.declare_queue(
                 self.push_queue,
                 durable=True,
@@ -216,7 +164,7 @@ class MessageQueueManager:
                 }
             )
             
-            # Declare retry queue
+
             retry_queue_obj = await self.channel.declare_queue(
                 self.retry_queue,
                 durable=True,
@@ -226,13 +174,11 @@ class MessageQueueManager:
                 }
             )
             
-            # Declare dead letter queue (failed.queue)
             failed_queue_obj = await self.channel.declare_queue(
                 self.dead_letter_queue,
                 durable=True
             )
             
-            # Bind queues to exchange
             await push_queue_obj.bind(self.exchange, routing_key=self.push_queue)
             await retry_queue_obj.bind(self.exchange, routing_key=self.retry_queue)
             await failed_queue_obj.bind(self.exchange, routing_key=self.dead_letter_queue)
@@ -259,7 +205,7 @@ class MessageQueueManager:
         if self.connection:
             await self.connection.close()
 
-# ============= Redis Cache Manager =============
+
 class CacheManager:
     def __init__(self, redis_url: str):
         self.redis_url = redis_url
@@ -284,7 +230,6 @@ class CacheManager:
 
 class DatabaseManager:
     def __init__(self, database_url: str):
-        # Convert postgresql:// to postgresql+asyncpg:// for async support
         if database_url.startswith("postgresql://"):
             database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         self.database_url = database_url
@@ -373,14 +318,12 @@ class DatabaseManager:
     ) -> DeviceToken:
         """Create or update device token for a user"""
         async with self.async_session() as session:
-            # Check if token already exists
             result = await session.execute(
                 select(DeviceToken).where(DeviceToken.token == token)
             )
             existing_token = result.scalar_one_or_none()
             
             if existing_token:
-                # Update existing token
                 existing_token.user_id = user_id
                 existing_token.device_type = device_type
                 existing_token.platform = platform
@@ -390,7 +333,6 @@ class DatabaseManager:
                 await session.refresh(existing_token)
                 return existing_token
             else:
-                # Create new token
                 device_token = DeviceToken(
                     user_id=user_id,
                     token=token,
@@ -429,7 +371,6 @@ class DatabaseManager:
         if self.engine:
             await self.engine.dispose()
 
-# ============= Notification Consumer =============
 class NotificationConsumer:
     def __init__(self, queue_manager: MessageQueueManager, 
                  cache_manager: CacheManager,
@@ -451,21 +392,17 @@ class NotificationConsumer:
                 data = json.loads(message.body.decode())
                 logger.info(f"[{correlation_id}] Processing notification: {data.get('title')}")
                 
-                # Check if notification_id already exists in message (from previous retry)
                 notification_id = data.get("notification_id")
                 
                 payload = PushNotificationPayload(**data)
                 
-                # Check idempotency
                 if payload.idempotency_key:
                     if await self.cache_manager.check_idempotency(payload.idempotency_key):
                         logger.info(f"[{correlation_id}] Duplicate notification, skipping")
                         return
                 
-                # Validate token (basic validation)
                 if not payload.token or len(payload.token) < 10:
                     logger.error(f"[{correlation_id}] Invalid device token")
-                    # Store failed notification in database if not already stored
                     if not notification_id:
                         try:
                             notification_data = {
@@ -478,7 +415,6 @@ class NotificationConsumer:
                         except Exception as db_error:
                             logger.error(f"[{correlation_id}] Failed to store notification in DB: {db_error}")
                     else:
-                        # Update existing notification
                         await self.db_manager.update_notification_status(
                             notification_id, 
                             "failed",
@@ -491,7 +427,6 @@ class NotificationConsumer:
                     )
                     return
                 
-                # Create notification record in database if not already exists
                 if not notification_id:
                     try:
                         notification_data = {
@@ -503,17 +438,13 @@ class NotificationConsumer:
                     except Exception as db_error:
                         logger.error(f"[{correlation_id}] Failed to store notification in DB: {db_error}")
                 else:
-                    # Update existing notification status to processing
                     await self.db_manager.update_notification_status(notification_id, "processing")
                 
-                # Send notification
                 result = self.push_service.send_push_notification(payload, correlation_id)
                 
-                # Update notification status to sent
                 if notification_id:
                     await self.db_manager.update_notification_status(notification_id, "sent")
                 
-                # Mark as processed
                 if payload.idempotency_key:
                     await self.cache_manager.set_idempotency(payload.idempotency_key)
                 
@@ -523,7 +454,6 @@ class NotificationConsumer:
                 logger.error(f"[{correlation_id}] Error processing message: {e}")
                 retry_count = data.get("retry_count", 0) if data else 0
                 
-                # Update notification status if it exists
                 if notification_id:
                     try:
                         await self.db_manager.update_notification_status(
@@ -536,7 +466,6 @@ class NotificationConsumer:
                         logger.error(f"[{correlation_id}] Failed to update notification status: {db_error}")
                 
                 if retry_count < self.max_retries:
-                    # Exponential backoff
                     delay = (2 ** retry_count) * 5
                     if data:
                         data["retry_count"] = retry_count + 1
@@ -549,7 +478,6 @@ class NotificationConsumer:
                     )
                     logger.info(f"[{correlation_id}] Message requeued for retry {retry_count + 1}")
                 else:
-                    # Move to dead letter queue
                     await self.queue_manager.publish_message(
                         self.queue_manager.dead_letter_queue,
                         {**(data if data else {}), "error": str(e), "notification_id": notification_id}
@@ -557,7 +485,6 @@ class NotificationConsumer:
                     logger.error(f"[{correlation_id}] Message moved to DLQ after {self.max_retries} retries")
     
     async def start_consuming(self):
-        # Get queues (they should already be declared and bound in connect)
         push_queue = await self.queue_manager.channel.get_queue(self.queue_manager.push_queue)
         retry_queue = await self.queue_manager.channel.get_queue(self.queue_manager.retry_queue)
         
@@ -566,8 +493,6 @@ class NotificationConsumer:
         
         logger.info("Started consuming messages from push and retry queues")
 
-# ============= FastAPI Application =============
-# Global instances
 queue_manager = None
 cache_manager = None
 push_service = None
@@ -576,17 +501,14 @@ db_manager = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     global queue_manager, cache_manager, push_service, consumer, db_manager
     
-    # Configuration
     rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
     database_url = os.getenv("DATABASE_URL", "postgresql://notif_user:notif_pass@postgres:5432/notifications_db")
     service_account_path = "firebase-credentials.json"
     project_id = os.getenv("PROJECT_ID", "mindful-torus-458106-p9")
     
-    # Initialize services
     queue_manager = MessageQueueManager(rabbitmq_url)
     await queue_manager.connect()
     
@@ -598,7 +520,6 @@ async def lifespan(app: FastAPI):
     
     push_service = PushServiceManager(service_account_path, project_id)
     
-    # Start consumer
     consumer = NotificationConsumer(queue_manager, cache_manager, push_service, db_manager)
     asyncio.create_task(consumer.start_consuming())
     
@@ -606,7 +527,6 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown
     await queue_manager.close()
     await cache_manager.close()
     await db_manager.close()
@@ -614,7 +534,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Push Notification Service", lifespan=lifespan)
 
-# ============= API Endpoints =============
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -649,13 +568,10 @@ async def health_check():
 async def send_notification(payload: PushNotificationPayload):
     """Queue a push notification for sending"""
     try:
-        # Generate idempotency key if not provided
         if not payload.idempotency_key:
             payload.idempotency_key = str(uuid.uuid4())
         
-        # Check for duplicate
         if await cache_manager.check_idempotency(payload.idempotency_key):
-            # Try to get existing notification from database
             existing_notification = await db_manager.get_notification_by_idempotency_key(payload.idempotency_key)
             if existing_notification:
                 return APIResponse(
@@ -673,13 +589,11 @@ async def send_notification(payload: PushNotificationPayload):
                 data={"idempotency_key": payload.idempotency_key}
             ).dict()
         
-        # Create notification record in database
         notification_data = payload.dict()
         notification_data["status"] = "pending"
         notification_data["retry_count"] = 0
         notification = await db_manager.create_notification(notification_data)
         
-        # Publish to queue
         message = payload.dict()
         message["retry_count"] = 0
         message["queued_at"] = datetime.utcnow().isoformat()
@@ -707,7 +621,7 @@ async def send_notification(payload: PushNotificationPayload):
         return APIResponse(
             success=False,
             message="Failed to queue notification",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 @app.post("/api/notifications/send-immediate")
@@ -716,7 +630,6 @@ async def send_immediate_notification(payload: PushNotificationPayload):
     correlation_id = str(uuid.uuid4())
     
     try:
-        # Check idempotency
         if payload.idempotency_key:
             if await cache_manager.check_idempotency(payload.idempotency_key):
                 existing_notification = await db_manager.get_notification_by_idempotency_key(payload.idempotency_key)
@@ -731,18 +644,14 @@ async def send_immediate_notification(payload: PushNotificationPayload):
                         }
                     ).dict()
         
-        # Create notification record
         notification_data = payload.dict()
         notification_data["status"] = "processing"
         notification = await db_manager.create_notification(notification_data)
         
-        # Send notification
         result = push_service.send_push_notification(payload, correlation_id)
         
-        # Update notification status
         await db_manager.update_notification_status(str(notification.id), "sent")
         
-        # Mark as processed
         if payload.idempotency_key:
             await cache_manager.set_idempotency(payload.idempotency_key)
         
@@ -758,7 +667,6 @@ async def send_immediate_notification(payload: PushNotificationPayload):
         
     except Exception as e:
         logger.error(f"[{correlation_id}] Error sending notification: {e}")
-        # Update notification status to failed if it exists
         if 'notification' in locals():
             try:
                 await db_manager.update_notification_status(
@@ -772,7 +680,7 @@ async def send_immediate_notification(payload: PushNotificationPayload):
         return APIResponse(
             success=False,
             message="Failed to send notification",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 @app.get("/api/notifications/status")
@@ -804,7 +712,6 @@ async def get_notification_status(
                 error="No notification found with the provided identifier"
             ).dict()
         
-        # Safely extract notification data
         device_token = notification.device_token
         sent_at = notification.sent_at
         created_at = notification.created_at
@@ -814,7 +721,7 @@ async def get_notification_status(
             "id": str(notification.id),
             "idempotency_key": notification.idempotency_key,
             "user_id": notification.user_id,
-            "device_token": (device_token[:20] + "...") if device_token and len(device_token) > 20 else device_token,  # Partial token for security
+            "device_token": (device_token[:20] + "...") if device_token and len(device_token) > 20 else device_token,
             "notification_type": notification.notification_type,
             "title": notification.title,
             "body": notification.body,
@@ -842,7 +749,7 @@ async def get_notification_status(
         return APIResponse(
             success=False,
             message="Failed to retrieve notification status",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 @app.post("/api/notifications/send-bulk")
@@ -860,13 +767,11 @@ async def send_bulk_notifications(request: BulkNotificationRequest):
         duplicate_count = 0
         error_count = 0
         
-        for idx, payload in enumerate(request.notifications):
+        for idx, payload in erate(request.notifications):
             try:
-                # Generate idempotency key if not provided
                 if not payload.idempotency_key:
                     payload.idempotency_key = str(uuid.uuid4())
                 
-                # Check for duplicate
                 is_duplicate = await cache_manager.check_idempotency(payload.idempotency_key)
                 if is_duplicate:
                     existing_notification = await db_manager.get_notification_by_idempotency_key(payload.idempotency_key)
@@ -880,13 +785,11 @@ async def send_bulk_notifications(request: BulkNotificationRequest):
                     duplicate_count += 1
                     continue
                 
-                # Create notification record in database
                 notification_data = payload.dict()
                 notification_data["status"] = "pending"
                 notification_data["retry_count"] = 0
                 notification = await db_manager.create_notification(notification_data)
                 
-                # Publish to queue
                 message = payload.dict()
                 message["retry_count"] = 0
                 message["queued_at"] = datetime.utcnow().isoformat()
@@ -912,7 +815,8 @@ async def send_bulk_notifications(request: BulkNotificationRequest):
                     "index": idx,
                     "idempotency_key": payload.idempotency_key if payload.idempotency_key else None,
                     "status": "error",
-                    "message": f"Failed to queue notification: {str(e)}"
+                    "message": "Failed to queue notification",
+                    "error": "internal_error"
                 })
                 error_count += 1
         
@@ -935,7 +839,7 @@ async def send_bulk_notifications(request: BulkNotificationRequest):
         return APIResponse(
             success=False,
             message="Failed to process bulk notifications",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 @app.post("/api/device-tokens")
@@ -961,7 +865,7 @@ async def register_device_token(request: DeviceTokenRequest):
             data={
                 "id": str(device_token.id),
                 "user_id": device_token.user_id,
-                "token": device_token.token[:20] + "..." if len(device_token.token) > 20 else device_token.token,  # Partial for security
+                "token": device_token.token[:20] + "..." if len(device_token.token) > 20 else device_token.token,
                 "device_type": device_token.device_type,
                 "platform": device_token.platform,
                 "is_active": device_token.is_active,
@@ -977,7 +881,7 @@ async def register_device_token(request: DeviceTokenRequest):
         return APIResponse(
             success=False,
             message="Failed to register device token",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 @app.get("/api/device-tokens/{user_id}")
@@ -991,7 +895,7 @@ async def get_user_device_tokens(user_id: str, active_only: bool = True):
             tokens_data.append({
                 "id": str(token.id),
                 "user_id": token.user_id,
-                "token": token.token[:20] + "..." if len(token.token) > 20 else token.token,  # Partial for security
+                "token": token.token[:20] + "..." if len(token.token) > 20 else token.token,
                 "device_type": token.device_type,
                 "platform": token.platform,
                 "is_active": token.is_active,
@@ -1011,7 +915,7 @@ async def get_user_device_tokens(user_id: str, active_only: bool = True):
         return APIResponse(
             success=False,
             message="Failed to retrieve device tokens",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 @app.delete("/api/device-tokens/{token}")
@@ -1037,7 +941,7 @@ async def deactivate_device_token(token: str):
         return APIResponse(
             success=False,
             message="Failed to deactivate device token",
-            error=str(e)
+            error="internal_error"
         ).dict()
 
 if __name__ == "__main__":
