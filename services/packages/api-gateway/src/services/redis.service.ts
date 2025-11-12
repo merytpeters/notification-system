@@ -124,6 +124,63 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // Idempotency key management
+  async setIdempotencyMapping(
+    idempotencyKey: string,
+    notificationId: string,
+    timestamp: string,
+    ttl = 604800, // 7 days
+  ): Promise<void> {
+    try {
+      const key = `idempotency:${idempotencyKey}`;
+      await this.client.setex(key, ttl, JSON.stringify({
+        notification_id: notificationId,
+        timestamp,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to set idempotency mapping', error);
+    }
+  }
+
+  async getNotificationStatusByIdempotencyKey(idempotencyKey: string): Promise<string | null> {
+    try {
+      const key = `idempotency:${idempotencyKey}`;
+      const data = await this.client.get(key);
+      if (!data) {
+        return null;
+      }
+      
+      const mapping = JSON.parse(data);
+      return await this.getNotificationStatus(mapping.notification_id);
+    } catch (error) {
+      this.logger.error('Failed to get notification status by idempotency key', error);
+      return null;
+    }
+  }
+
+  async getNotificationMetadataByIdempotencyKey(idempotencyKey: string): Promise<any | null> {
+    try {
+      const key = `idempotency:${idempotencyKey}`;
+      const data = await this.client.get(key);
+      if (!data) {
+        return null;
+      }
+      
+      const mapping = JSON.parse(data);
+      const metadata = await this.getNotificationMetadata(mapping.notification_id);
+      if (metadata) {
+        return {
+          ...metadata,
+          notification_id: mapping.notification_id,
+        };
+      }
+      return null;
+    } catch (error) {
+      this.logger.error('Failed to get notification metadata by idempotency key', error);
+      return null;
+    }
+  }
+
   // Rate limiting
   async checkRateLimit(key: string, limit: number, window: number): Promise<boolean> {
     try {

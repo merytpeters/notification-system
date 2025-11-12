@@ -1,0 +1,78 @@
+
+services:
+  # API Gateway Service
+  api-gateway:
+    image: simonsinglad/notification-gateway:1.0
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      # Server Configuration
+      PORT: 3000
+      NODE_ENV: production
+      
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 1d
+      
+      # Logging Configuration
+      LOG_LEVEL: debug
+      
+      # Redis
+      REDIS_URL: ${REDIS_URL}
+      
+      # Service URLs
+      USER_SERVICE_URL: http://user-service:3001
+      EMAIL_SERVICE_URL: http://email-service:3002
+      PUSH_NOTIFICATION_SERVICE_URL: http://54.91.107.214
+      API_GATEWAY_URL: http://localhost:3000
+      
+      # API Paths
+      API_GATEWAY_PATH: /api/v1
+      
+      # Rate Limiter Configurations
+      RATE_LIMIT_TTL: 60
+      RATE_LIMIT_MAX: 100
+      
+      # RabbitMQ
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EMAIL_QUEUE: email_notifications
+      RABBITMQ_PUSH_QUEUE: push_notifications
+      RABBITMQ_STATUS_QUEUE: notification_status
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  # User Service
+  user-service:
+    image: simonsinglad/user-service:1.0
+    container_name: user-service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  # Email Service
+  email-service:
+    image: simonsinglad/email-service:1.0
+    container_name: email-service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      SENDER_EMAIL: ${SENDER_EMAIL}
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+networks:
+  notification-network:
+    driver: bridge

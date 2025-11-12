@@ -8,6 +8,8 @@ import { ApiBearerAuth, ApiTags, ApiOperation,ApiResponse } from '@nestjs/swagge
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { NotFoundException } from '@nestjs/common';
+import { CurrentUser } from '../decorators/user.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 
@@ -74,6 +76,27 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async getUserPreferences(@Param('id') id: string) {
     return this.usersService.getUserPreferences(id);
+  }
+
+  @Put(':id/preferences')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update user notification preferences' })
+  @ApiResponse({ status: 200, description: 'Preferences updated successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async updatePreferences(
+    @Body() preferencesDto: { email_enabled?: boolean; push_enabled?: boolean },
+    @CurrentUser('user_id') userId: string,
+  ): Promise<{ message: string; preferences: any }> {
+    try {
+      const user = await this.usersService.updatePreferences(userId, preferencesDto);
+      return {
+        message: 'Preferences updated successfully',
+        preferences: user.preferences,
+      };
+    } catch (error) {
+      throw new NotFoundException('Failed to update preferences');
+    }
   }
 }
 

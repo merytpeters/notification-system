@@ -7,6 +7,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -137,5 +138,38 @@ export class NotificationsController {
       notification_id: statusDto.notification_id,
       status: statusDto.status,
     };
+  }
+
+  @Post('send')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Send a push notification' })
+  @ApiResponse({
+    status: 202,
+    description: 'Push notification queued',
+    type: NotificationResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async sendNotification(
+    @Body() pushDto: PushNotificationDto,
+    @CurrentUser('userId') userId: string,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationService.sendPushNotification(pushDto, userId);
+  }
+
+  @Get('status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get notification status by idempotency key' })
+  @ApiParam({ name: 'idempotency_key', description: 'Idempotency key for the notification' })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification status retrieved',
+  })
+  @ApiResponse({ status: 404, description: 'Notification not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getStatusByIdempotencyKey(
+    @Query('idempotency_key') idempotencyKey: string,
+  ): Promise<any> {
+    return this.notificationService.getNotificationStatusByIdempotencyKey(idempotencyKey);
   }
 }
