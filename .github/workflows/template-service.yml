@@ -61,8 +61,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Start Redis container
-        run: docker run -d --name redis-ci -p 6379:6379 redis:7
+      - name: Create docker network
+        run: |
+          docker network create template-ci-net || true
+
+      - name: Start Redis container on network
+        run: |
+          docker run -d --name redis-ci --network template-ci-net redis:7-alpine
 
       - name: Build Template Service image
         uses: docker/build-push-action@v4
@@ -79,8 +84,9 @@ jobs:
           set -euo pipefail
           echo "Starting Template Service container..."
           docker run -d --name template-ci \
+            --network template-ci-net \
             -e TEMPLATE_DATABASE_URL="${{ secrets.TEMPLATE_DATABASE_URL }}" \
-            -e REDIS_HOST="host.docker.internal" \
+            -e REDIS_HOST="redis-ci" \
             -e REDIS_PORT="6379" \
             -p 8000:8000 \
             template-service:ci
@@ -97,7 +103,8 @@ jobs:
 
           echo "Container logs (last 100 lines):"
           docker logs template-ci --tail 100 || true
-          docker stop template-ci
-          docker rm template-ci
-          docker stop redis-ci
-          docker rm redis-ci
+          docker stop template-ci || true
+          docker rm template-ci || true
+          docker stop redis-ci || true
+          docker rm redis-ci || true
+          docker network rm template-ci-net || true

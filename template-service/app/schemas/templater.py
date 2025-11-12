@@ -35,7 +35,7 @@ class TemplateVersionCreate(BaseModel):
     header: str
     subtitle: Optional[str] = None
     content: str
-    is_active: Optional[bool] = True
+    is_active: bool = True
     creator_user_id: str
     creator_user_name: Optional[str] = None
 
@@ -79,6 +79,15 @@ class TemplateCreate(BaseModel):
 class TemplateUpdate(BaseModel):
     """Update template metadata (not version content)"""
 
+    name: str
+    description: Optional[str] = None
+    template_type: TemplateType
+
+
+class TemplatePatch(BaseModel):
+    """Partial update of template metadata (PATCH)"""
+
+    name: Optional[str] = None
     description: Optional[str] = None
     template_type: Optional[TemplateType] = None
 
@@ -91,6 +100,20 @@ class TemplateOut(BaseSchema):
     description: Optional[str] = None
     template_type: TemplateType
     created_at: datetime
+    updated_at: Optional[datetime] = None
     versions: List[TemplateVersionOut]
 
     model_config = {"from_attributes": True}
+
+
+class TemplateRenderSchema(BaseModel):
+    """Renders Template"""
+
+    name: str
+    description: Optional[str] = None
+    version: int
+    header: str
+    subtitle: Optional[str] = None
+    content: str
+    type: TemplateType
+    user: Optional[dict]
