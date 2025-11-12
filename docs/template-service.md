@@ -150,3 +150,52 @@ Formatting
 - `template-service/app` — application code and routes
 - `template-service/requirements.txt` — Python dependencies
 - `template-service/Dockerfile` — container build
+
+## API Endpoints
+
+This document lists the primary API endpoints exposed by the Template Service and notes that FastAPI serves interactive OpenAPI at `/docs`.
+
+The service mounts its router under the prefix `/api/v1/templates`.
+
+Primary endpoints (full paths):
+
+- GET /api/v1/templates/ — list all templates (200)
+- POST /api/v1/templates/ — create a new template + initial version (201)
+- DELETE /api/v1/templates/ — delete all templates (204)
+- GET /api/v1/templates/{template_id} — get a single template and its versions (200)
+- PATCH /api/v1/templates/{template_id} — partially update a template (200)
+- PUT /api/v1/templates/{template_id} — fully update a template (200)
+- DELETE /api/v1/templates/{template_id} — delete a template and all its versions (204)
+- POST /api/v1/templates/{template_id}/versions — create a new version for a template (201)
+- GET /api/v1/templates/type/{template_type} — list templates by type (email, push, etc.) (200)
+- GET /api/v1/templates/{template_id}/{version_number} — get a specific version (200)
+- PATCH /api/v1/templates/{template_id}/versions/{version_number} — update a specific version (200)
+- DELETE /api/v1/templates/templates/{template_id}/versions/{version_number} — delete a version by number (204)
+  - Note: the implementation contains an extra `templates` segment for this route, so the effective full path is `/api/v1/templates/templates/{template_id}/versions/{version_number}`.
+- GET /api/v1/templates/preview/{template_id}/{user_id} — render an HTML preview for a template (returns Jinja2-rendered HTML)
+
+Other useful endpoints:
+
+- GET /health — basic healthcheck used by orchestration and load balancers
+- GET /docs — interactive OpenAPI UI (Swagger)
+- GET /openapi.json — raw OpenAPI JSON spec
+
+Quick examples
+
+- List templates (curl):
+
+  ```bash
+  curl -sS http://localhost:8000/api/v1/templates/ | jq '.'
+  ```
+
+- Preview template in a browser (returns rendered HTML):
+
+  Visit `http://localhost:8000/api/v1/templates/preview/<template_id>/<user_id>` in your browser or use curl:
+
+  ```bash
+  curl -i http://localhost:8000/api/v1/templates/preview/<template_id>/<user_id>
+  ```
+
+Notes
+
+- Open `http://localhost:8000/docs` while the service is running to inspect exact request/response models and try operations interactively.
