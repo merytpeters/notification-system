@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>{{ name }}</title>
+    <meta name="description" content="{{ description }}" />
+    <meta name="version" content="{{ version }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {% if type == 'email' %}
+    <link rel="stylesheet" href="/static/css/email.css" />
+    {% elif type == 'push' %}
+    <link rel="stylesheet" href="/static/css/push.css" />
+    {% elif type == 'in_app' %}
+    <link rel="stylesheet" href="/static/css/inapp.css" />
+    {% endif %}
+  </head>
+  <body>
+    <div class="notification {{ template_type }}">
+      {% if type == 'email' %}
+      <h2>{{ header }}</h2>
+      {% if subtitle %}<h3>{{ subtitle }}</h3>{% endif %}
+      <p>Hi {{ user.name }}</p>
+      <p>{{ content | safe }}</p>
+
+      {% elif type == 'in_app' %}
+      <h2>{{ header }}</h2>
+      <p>Hi {{ user.name }}</p>
+      <p>{{ content | safe }}</p>
+
+      {% elif type == 'push' %}
+      <strong>{{ header }}</strong>
+      {% if subtitle %}<small>{{ subtitle }}</small>{% endif %}
+      <p>Hi {{ user.name }}</p>
+      <p>{{ content }}</p>
+      {% endif %}
+    </div>
+  </body>
+</html>

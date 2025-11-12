@@ -30,6 +30,9 @@ class Template(SQLModel, table=True):
         )
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime | None = Field(
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now()), default=None
+    )
     versions: List["TemplateVersion"] = Relationship(back_populates="template")
 
 

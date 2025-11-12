@@ -6,26 +6,26 @@ from typing import Awaitable, cast
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
-# REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+# Use cloud Redis if available, otherwise fallback to local
+REDIS_URL = (
+    os.getenv("REDIS_URL")
+    or f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{int(os.getenv('REDIS_PORT', 6379))}/{int(os.getenv('REDIS_DB', 0))}"
+)
 
 redis_client: Redis | None = None
 
 
 def init_redis() -> None:
-    """Initialize the Redis client."""
+    """Initialize the Redis client using REDIS_URL."""
     global redis_client
     if redis_client is None:
-        redis_client = Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            db=REDIS_DB,
+        redis_client = Redis.from_url(
+            REDIS_URL,
             decode_responses=True,
             socket_connect_timeout=2.0,
             socket_timeout=2.0,
         )
+        print(f"Redis initialized using: {REDIS_URL}")
 
 
 async def test_redis(timeout: float = 2.0) -> bool:
