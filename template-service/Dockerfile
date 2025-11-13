@@ -29,4 +29,4 @@ USER appuser
 
 EXPOSE 80
 
-CMD ["/venv/bin/python", "start.py"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
