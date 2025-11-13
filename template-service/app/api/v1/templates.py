@@ -103,6 +103,144 @@ def delete_all_templates(session: Session = Depends(get_session)):
     return
 
 
+@router.post("/preview/{template_id}/{user_id}")
+async def preview_template(
+    template_id: UUID,
+    user_id: str,
+    request_body: PreviewRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    redis = await get_redis()
+
+    # --- Cache template version ---
+    template_cache_key = f"template:{template_id}:latest_version"
+    cached_version = await redis.get(template_cache_key)
+    if cached_version:
+        version = json.loads(cached_version)
+    else:
+        template = session.get(Template, template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        if not template.versions:
+            raise HTTPException(
+                status_code=404, detail="No versions available for this template"
+            )
+
+        latest_version = sorted(template.versions, key=lambda v: v.version)[-1]
+        version = latest_version.model_dump()
+        await redis.set(template_cache_key, json.dumps(version), ex=300)
+
+    user_service_url = request_body.user_service_url or os.getenv("USER_SERVICE_URL")
+    email_service_url = request_body.email_service_url or os.getenv("EMAIL_SERVICE_URL")
+
+    # --- User data ---
+    user_cache_key = f"user:{user_id}"
+    cached_user = await redis.get(user_cache_key)
+    if cached_user:
+        user_data = json.loads(cached_user)
+    else:
+        user_data = await get_user(user_id, base_url=user_service_url)
+        await redis.set(user_cache_key, json.dumps(user_data), ex=300)
+
+    # --- Email settings ---
+    email_cache_key = f"email_settings:{user_id}"
+    cached_email = await redis.get(email_cache_key)
+    if cached_email:
+        email_settings = json.loads(cached_email)
+    else:
+        email_settings = await get_email_settings(user_id, base_url=email_service_url)
+        await redis.set(email_cache_key, json.dumps(email_settings), ex=300)
+
+    # --- Render template ---
+    render_data = TemplateRenderSchema(
+        name=version["name"],
+        description=version.get("description"),
+        version=version["version"],
+        header=version["header"],
+        subtitle=version.get("subtitle"),
+        content=version["content"],
+        type=version["type"],
+        user=user_data,
+    )
+
+    return templates.TemplateResponse(
+        "notification.html",
+        {
+            "request": request,
+            **render_data.model_dump(),
+            "email_settings": email_settings,
+        },
+    )
+
+
+@router.post(
+    "/{template_id}/versions",
+    response_model=TemplateVersionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_new_template_version(
+    template_id: UUID,
+    version_in: TemplateVersionCreate,
+    session: Session = Depends(get_session),
+):
+    """Create a new version of an existing template"""
+    template = session.get(Template, template_id)
+    if not template:
+        raise HTTPException(404, "This template does not exist in db")
+
+    max_version = max([v.version for v in template.versions], default=0)
+    new_version = TemplateVersion(
+        template_id=template_id,
+        version=max_version + 1,
+        header=version_in.header,
+        subtitle=version_in.subtitle,
+        content=version_in.content,
+        is_active=version_in.is_active,
+        creator_user_id=version_in.creator_user_id,
+        creator_user_name=version_in.creator_user_name,
+    )
+
+    session.add(new_version)
+    session.commit()
+    session.refresh(new_version)
+    return new_version
+
+
+@router.patch(
+    "/{template_id}/versions/{version_number}",
+    response_model=TemplateVersionOut,
+    status_code=200,
+)
+def update_template_version_by_number(
+    template_id: UUID,
+    version_number: int,
+    version_data: TemplateVersionUpdate,
+    session: Session = Depends(get_session),
+):
+    """
+    Partially update a template version identified by template_id and version number.
+    """
+    version = session.exec(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == template_id,
+            TemplateVersion.version == version_number,
+        )
+    ).first()
+
+    if not version:
+        raise HTTPException(status_code=404, detail="Template version not found")
+
+    update_data = version_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(version, key, value)
+
+    session.add(version)
+    session.commit()
+    session.refresh(version)
+    return version
+
+
 @router.get(
     "/{template_id}", response_model=TemplateOut, status_code=status.HTTP_200_OK
 )
@@ -193,39 +331,6 @@ def delete_template_and_versions(
     return
 
 
-@router.post(
-    "/{template_id}/versions",
-    response_model=TemplateVersionOut,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_new_template_version(
-    template_id: UUID,
-    version_in: TemplateVersionCreate,
-    session: Session = Depends(get_session),
-):
-    """Create a new version of an existing template"""
-    template = session.get(Template, template_id)
-    if not template:
-        raise HTTPException(404, "This template does not exist in db")
-
-    max_version = max([v.version for v in template.versions], default=0)
-    new_version = TemplateVersion(
-        template_id=template_id,
-        version=max_version + 1,
-        header=version_in.header,
-        subtitle=version_in.subtitle,
-        content=version_in.content,
-        is_active=version_in.is_active,
-        creator_user_id=version_in.creator_user_id,
-        creator_user_name=version_in.creator_user_name,
-    )
-
-    session.add(new_version)
-    session.commit()
-    session.refresh(new_version)
-    return new_version
-
-
 @router.get(
     "/type/{template_type}",
     response_model=List[TemplateOut],
@@ -268,113 +373,8 @@ def get_template_by_version(
     return version
 
 
-@router.patch(
-    "/{template_id}/versions/{version_number}",
-    response_model=TemplateVersionOut,
-    status_code=200,
-)
-def update_template_version_by_number(
-    template_id: UUID,
-    version_number: int,
-    version_data: TemplateVersionUpdate,
-    session: Session = Depends(get_session),
-):
-    """
-    Partially update a template version identified by template_id and version number.
-    """
-    version = session.exec(
-        select(TemplateVersion).where(
-            TemplateVersion.template_id == template_id,
-            TemplateVersion.version == version_number,
-        )
-    ).first()
-
-    if not version:
-        raise HTTPException(status_code=404, detail="Template version not found")
-
-    update_data = version_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(version, key, value)
-
-    session.add(version)
-    session.commit()
-    session.refresh(version)
-    return version
-
-
-@router.post("/preview/{template_id}/{user_id}")
-async def preview_template(
-    template_id: UUID,
-    user_id: str,
-    request_body: PreviewRequest,
-    request: Request,
-    session: Session = Depends(get_session),
-):
-    redis = await get_redis()
-
-    # --- Cache template version ---
-    template_cache_key = f"template:{template_id}:latest_version"
-    cached_version = await redis.get(template_cache_key)
-    if cached_version:
-        version = json.loads(cached_version)
-    else:
-        template = session.get(Template, template_id)
-        if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
-        if not template.versions:
-            raise HTTPException(
-                status_code=404, detail="No versions available for this template"
-            )
-
-        latest_version = sorted(template.versions, key=lambda v: v.version)[-1]
-        version = latest_version.model_dump()
-        await redis.set(template_cache_key, json.dumps(version), ex=300)
-
-    user_service_url = request_body.user_service_url or os.getenv("USER_SERVICE_URL")
-    email_service_url = request_body.email_service_url or os.getenv("EMAIL_SERVICE_URL")
-
-    # --- User data ---
-    user_cache_key = f"user:{user_id}"
-    cached_user = await redis.get(user_cache_key)
-    if cached_user:
-        user_data = json.loads(cached_user)
-    else:
-        user_data = await get_user(user_id, base_url=user_service_url)
-        await redis.set(user_cache_key, json.dumps(user_data), ex=300)
-
-    # --- Email settings ---
-    email_cache_key = f"email_settings:{user_id}"
-    cached_email = await redis.get(email_cache_key)
-    if cached_email:
-        email_settings = json.loads(cached_email)
-    else:
-        email_settings = await get_email_settings(user_id, base_url=email_service_url)
-        await redis.set(email_cache_key, json.dumps(email_settings), ex=300)
-
-    # --- Render template ---
-    render_data = TemplateRenderSchema(
-        name=version["name"],
-        description=version.get("description"),
-        version=version["version"],
-        header=version["header"],
-        subtitle=version.get("subtitle"),
-        content=version["content"],
-        type=version["type"],
-        user=user_data,
-    )
-
-    return templates.TemplateResponse(
-        "notification.html",
-        {
-            "request": request,
-            **render_data.model_dump(),
-            "email_settings": email_settings,
-        },
-    )
-
-
 @router.delete(
-    "/templates/{template_id}/versions/{version_number}",
+    "/{template_id}/versions/{version_number}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_version_by_number(
