@@ -1,4 +1,5 @@
 import json
+import os
 from typing import List
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -19,6 +20,7 @@ from app.schemas.templater import (
     TemplatePatch,
     TemplateRenderSchema,
     TemplateVersionUpdate,
+    PreviewRequest,
 )
 
 
@@ -300,15 +302,17 @@ def update_template_version_by_number(
     return version
 
 
-@router.get("/preview/{template_id}/{user_id}")
+@router.post("/preview/{template_id}/{user_id}")
 async def preview_template(
     template_id: UUID,
     user_id: str,
+    request_body: PreviewRequest,
     request: Request,
     session: Session = Depends(get_session),
 ):
     redis = await get_redis()
 
+    # --- Cache template version ---
     template_cache_key = f"template:{template_id}:latest_version"
     cached_version = await redis.get(template_cache_key)
     if cached_version:
@@ -321,26 +325,30 @@ async def preview_template(
             raise HTTPException(
                 status_code=404, detail="No versions available for this template"
             )
+
         latest_version = sorted(template.versions, key=lambda v: v.version)[-1]
         version = latest_version.model_dump()
         await redis.set(template_cache_key, json.dumps(version), ex=300)
 
-    # --- User data caching ---
+    user_service_url = request_body.user_service_url or os.getenv("USER_SERVICE_URL")
+    email_service_url = request_body.email_service_url or os.getenv("EMAIL_SERVICE_URL")
+
+    # --- User data ---
     user_cache_key = f"user:{user_id}"
     cached_user = await redis.get(user_cache_key)
     if cached_user:
         user_data = json.loads(cached_user)
     else:
-        user_data = await get_user(user_id)
+        user_data = await get_user(user_id, base_url=user_service_url)
         await redis.set(user_cache_key, json.dumps(user_data), ex=300)
 
-    # --- Email settings caching ---
+    # --- Email settings ---
     email_cache_key = f"email_settings:{user_id}"
     cached_email = await redis.get(email_cache_key)
     if cached_email:
         email_settings = json.loads(cached_email)
     else:
-        email_settings = await get_email_settings(user_id)
+        email_settings = await get_email_settings(user_id, base_url=email_service_url)
         await redis.set(email_cache_key, json.dumps(email_settings), ex=300)
 
     # --- Render template ---

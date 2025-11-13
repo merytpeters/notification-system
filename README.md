@@ -6,11 +6,11 @@ A scalable microservices-based notification system built with TypeScript, Node.j
 
 This system consists of the following microservices:
 
-- **API Gateway** (Port 3000) - Central entry point with JWT authentication and request routing
-- **User Service** (Port 3001) - User management with PostgreSQL + Prisma ORM
-- **Email Service** (Port 3002) - Email delivery with SendGrid integration
-- **Push Notification Service** (Port 3003) - Push notifications with Firebase FCM
-- **Template Service** (Port 3004) - Template management with Python FastAPI
+- **API Gateway** - Central entry point with JWT authentication and request routing
+- **User Service** - User management with PostgreSQL + Prisma ORM
+- **Email Service** - Email delivery with SendGrid integration
+- **Push Notification Service** - Push notifications with Firebase FCM
+- **Template Service** - Template management with Python FastAPI
 
 ### Key Features
 - ✅ JWT-based authentication with global guard strategy
@@ -122,7 +122,9 @@ npm run db:seed          # Seed database with sample data
 
 ### Service Endpoints
 
-#### API Gateway (http://localhost:3000)
+#### API Gateway
+- **Production URL**: https://notification-api-gateway-production.up.railway.app
+- **Development URL**: http://localhost:3000
 - `POST /auth/login` - User authentication
 - `POST /auth/register` - User registration
 - `GET /gateway-health` - Health check
@@ -133,14 +135,30 @@ npm run db:seed          # Seed database with sample data
 - `GET /notifications/:id/status` - Get notification status
 - `POST /notifications/status` - Update notification status (workers)
 
-#### User Service (http://localhost:3001)
+#### User Service
+- **Production URL**: https://notification-user-service-production.up.railway.app
+- **Development URL**: http://localhost:3001
 - `POST /auth/validate` - Credential validation
 - `GET /users/:id` - Get user by ID
 - `GET /users/email/:email` - Get user by email
 - `GET /users/:id/preferences` - Get user preferences
 - `POST /users/create-account` - Create new user
 
-#### Template Service (http://localhost:3004)
+#### Email Service
+- **Production URL**: https://notification-email-service-production.up.railway.app
+- **Development URL**: http://localhost:3002
+- `POST /email/send` - Send email
+- `GET /health` - Health check
+
+#### Push Notification Service
+- **Production URL**: http://54.91.107.214
+- **Development URL**: http://localhost:3003
+- `POST /push/send` - Send push notification
+- `GET /health` - Health check
+
+#### Template Service
+- **Production URL**: https://notification-template-service-production.up.railway.app
+- **Development URL**: http://localhost:3004
 - `GET /health` - Health check
 - `GET /templates` - List all templates
 - `POST /templates` - Create new template
@@ -150,9 +168,21 @@ npm run db:seed          # Seed database with sample data
 
 ### API Documentation
 Interactive API documentation is available:
-- **API Gateway**: http://localhost:3000/docs
-- **User Service**: http://localhost:3001/docs
-- **Template Service**: http://localhost:3004/docs
+- **API Gateway**:
+  - Production: https://notification-api-gateway-production.up.railway.app/docs
+  - Development: http://localhost:3000/docs
+- **User Service**:
+  - Production: https://notification-user-service-production.up.railway.app/api/docs#/
+  - Development: http://localhost:3001/docs
+- **Email Service**:
+  - Production: https://notification-email-service-production.up.railway.app/api/docs
+  - Development: http://localhost:3002/docs
+- **Push Notification Service**:
+  - Production: http://54.91.107.214/docs
+  - Development: http://localhost:3003/docs
+- **Template Service**:
+  - Production: https://notification-template-service-production.up.railway.app
+  - Development: http://localhost:3004/docs
 
 ## 🧪 Testing
 
