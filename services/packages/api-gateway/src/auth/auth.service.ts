@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserServiceClient } from '../services/user-service.client';
@@ -12,7 +12,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private userServiceClient: UserServiceClient,
-  ) {}
+  ) { }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     try {
@@ -81,7 +81,19 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error('Registration failed', error);
-      throw new UnauthorizedException('Registration failed');
+
+      // Check if it's a duplicate user error
+      if (error.message && error.message.includes('already exists')) {
+        throw new ConflictException('User with this email already exists');
+      }
+
+      // Check if it's a validation error
+      if (error.message && error.message.includes('validation')) {
+        throw new BadRequestException(error.message);
+      }
+
+      // Generic registration error
+      throw new BadRequestException('Registration failed. Please check your input and try again.');
     }
   }
 
