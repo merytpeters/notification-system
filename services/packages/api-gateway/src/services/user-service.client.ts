@@ -111,6 +111,8 @@ export class UserServiceClient {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     try {
+      this.logger.debug(`Attempting to validate user ${email} at ${this.userServiceUrl}/auth/validate`);
+
       const response = await firstValueFrom(
         this.httpService.post(`${this.userServiceUrl}/auth/validate`, {
           email,
@@ -118,16 +120,39 @@ export class UserServiceClient {
         }),
       );
 
+      this.logger.debug(`Successfully validated user ${email}`);
       return response.data;
     } catch (error) {
+      // Handle connection errors specifically
+      if (error.code === 'ECONNREFUSED') {
+        this.logger.error(`Connection refused to user service at ${this.userServiceUrl}`);
+        throw new HttpException(
+          `Unable to connect to user service at ${this.userServiceUrl}. Please ensure the user service is running.`,
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
       if (error.response?.status === 401) {
         return null;
       }
 
       this.logger.error('Failed to validate user', error);
+
+      // Handle HTTP errors from the service
+      if (error.response) {
+        const status = error.response.status;
+        const message = error.response.data?.message || error.response.data?.error || 'User validation failed';
+
+        throw new HttpException(
+          message,
+          status,
+        );
+      }
+
+      // Generic error
       throw new HttpException(
-        'Failed to validate user',
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to validate user: ' + (error.message || 'Unknown error'),
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -150,6 +175,8 @@ export class UserServiceClient {
 
   async createUser(email: string, password: string, fullName: string, pushToken?: string): Promise<User> {
     try {
+      this.logger.debug(`Attempting to create user ${email} at ${this.userServiceUrl}/users/create-account`);
+
       const response = await firstValueFrom(
         this.httpService.post(`${this.userServiceUrl}/users/create-account`, {
           email,
@@ -159,12 +186,34 @@ export class UserServiceClient {
         }),
       );
 
+      this.logger.debug(`Successfully created user ${email}`);
       return response.data;
     } catch (error) {
       this.logger.error(`Failed to create user ${email}`, error);
+
+      // Handle connection errors specifically
+      if (error.code === 'ECONNREFUSED') {
+        throw new HttpException(
+          `Unable to connect to user service at ${this.userServiceUrl}. Please ensure the user service is running.`,
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      // Handle HTTP errors from the service
+      if (error.response) {
+        const status = error.response.status;
+        const message = error.response.data?.message || error.response.data?.error || 'User creation failed';
+
+        throw new HttpException(
+          message,
+          status,
+        );
+      }
+
+      // Generic error
       throw new HttpException(
-        'Failed to create user',
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to create user: ' + (error.message || 'Unknown error'),
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

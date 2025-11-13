@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserServiceClient } from '../services/user-service.client';
@@ -16,6 +16,8 @@ export class AuthService {
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     try {
+      this.logger.debug(`Attempting to login user: ${loginDto.email}`);
+
       // Validate user credentials via User Service
       const user = await this.userServiceClient.validateUser(
         loginDto.email,
@@ -37,6 +39,8 @@ export class AuthService {
       const access_token = this.jwtService.sign(payload);
       const expiresIn = this.parseExpiresIn(jwtExpiresIn);
 
+      this.logger.debug(`Successfully logged in user: ${loginDto.email}`);
+
       return {
         access_token,
         token_type: 'bearer',
@@ -49,15 +53,35 @@ export class AuthService {
       };
     } catch (error) {
       this.logger.error('Login failed', error);
+
+      // Handle service unavailable errors
+      if (error.status === 503) {
+        throw new HttpException(
+          'User service is currently unavailable. Please try again later.',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
       if (error instanceof UnauthorizedException) {
         throw error;
       }
+
+      // Handle HTTP errors with proper status codes
+      if (error.response) {
+        throw new HttpException(
+          error.response.data?.message || error.response.data?.error || 'Authentication failed',
+          error.response.status,
+        );
+      }
+
       throw new UnauthorizedException('Authentication failed');
     }
   }
 
   async register(registerDto: RegisterDto): Promise<RegisterResponseDto> {
     try {
+      this.logger.debug(`Attempting to register user: ${registerDto.email}`);
+
       // Create user via User Service
       const user = await this.userServiceClient.createUser(
         registerDto.email,
@@ -65,6 +89,8 @@ export class AuthService {
         registerDto.full_name,
         registerDto.push_token,
       );
+
+      this.logger.debug(`Successfully registered user: ${registerDto.email}`);
 
       return {
         user: {
@@ -82,6 +108,14 @@ export class AuthService {
     } catch (error) {
       this.logger.error('Registration failed', error);
 
+      // Handle service unavailable errors
+      if (error.status === 503) {
+        throw new HttpException(
+          'User service is currently unavailable. Please try again later.',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
       // Check if it's a duplicate user error
       if (error.response?.data?.message && error.response.data.message.includes('already exists')) {
         throw new ConflictException('User with this email already exists');
@@ -97,8 +131,16 @@ export class AuthService {
         throw new BadRequestException(error.response.data.message);
       }
 
+      // Handle HTTP errors with proper status codes
+      if (error.response) {
+        const errorMessage = error.response.data?.message || error.response.data?.error || 'Registration failed';
+        this.logger.error(`HTTP Error: ${error.response.status} - ${errorMessage}`);
+        throw new HttpException(errorMessage, error.response.status);
+      }
+
       // Generic registration error with more details
-      const errorMessage = error.response?.data?.message || error.message || 'Registration failed. Please check your input and try again.';
+      const errorMessage = error.message || 'Registration failed. Please check your input and try again.';
+      this.logger.error(`Generic Error: ${errorMessage}`);
       throw new BadRequestException(errorMessage);
     }
   }
