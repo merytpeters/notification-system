@@ -374,7 +374,7 @@ async def preview_template(
 
 
 @router.delete(
-    "/templates/{template_id}/versions/{version_number}",
+    "/{template_id}/versions/{version_number}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_version_by_number(
